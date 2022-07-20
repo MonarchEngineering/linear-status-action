@@ -1,5 +1,5 @@
 import * as core from '@actions/core';
-import { parseInputIdentifiers, parseInputStateMap } from './input-handling';
+import { parseInputIdentifiers, parseInputStateMap, parseInputSkipIssues } from './input-handling';
 import { lookupTicketsByPR } from './pr-lookup';
 import * as github from '@actions/github';
 import { splitLinearIdentifiersByTeam, updateStatusOfLinearTickets } from './linear-status-update';
@@ -8,11 +8,13 @@ async function run(): Promise<void> {
   try {
     const identifiersAsString: string = core.getInput('pr-ids');
     const stateMapString: string = core.getInput('state-id-by-team');
+    const skipIssues: string = core.getInput('skip-issues-in-states');
     const isDryRun = core.getBooleanInput('dry-run');
 
     const githubContext = github.context;
     const { owner, repo } = githubContext.repo;
     const identifiers = parseInputIdentifiers(identifiersAsString);
+    const skipIssuesInStates = parseInputSkipIssues(skipIssues);
     const stateMap = parseInputStateMap(stateMapString);
 
     core.info(`Executing action with identifiers ${identifiers} and state maps ${stateMapString}`);
@@ -33,7 +35,7 @@ async function run(): Promise<void> {
         continue;
       }
 
-      await updateStatusOfLinearTickets(linearIdentifiers, stateId, isDryRun);
+      await updateStatusOfLinearTickets(linearIdentifiers, stateId, skipIssuesInStates, isDryRun);
     }
 
     core.info('Action finshed executing');
