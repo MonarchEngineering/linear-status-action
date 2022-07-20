@@ -8,7 +8,11 @@ inputs:
     default: '[]'
   state-id-by-team:
     required: true
-    description: 'A map of teams to state identifiers to change'
+    description: 'A map of teams to state IDs. Update issues in the team to that state'
+  skip-issues-in-states:
+    required: false
+    description: "Array of state IDs. Don't update issues in these states"
+    default: '[]'
   githubToken:
     required: true
     description: 'Github token to query for comments in PRs'

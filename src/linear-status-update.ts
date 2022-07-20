@@ -1,18 +1,25 @@
 import * as core from '@actions/core';
 import { LinearClient } from '@linear/sdk';
 
-export const updateStatusOfLinearTickets = async (identifiers: string[], stateId: string, isDryRun: boolean) => {
+export const updateStatusOfLinearTickets = async (identifiers: string[], stateId: string, skipIssuesInStates: string[], isDryRun: boolean) => {
   const identifiersAsString = core.getInput('linearToken');
 
   const linearClient = new LinearClient({ apiKey: identifiersAsString });
 
   // Collect UUID based identifiers
   // This is pretty inefficient, but Linear doesn't currently have a way to
-  // batch betch these IDs, or use the identifiers (ENG-123) to batch update issues. :(
+  // batch these IDs, or use the identifiers (ENG-123) to batch update issues. :(
   const uuidIdentifiers = [];
   for (const identifier of identifiers) {
     try {
       const issue = await linearClient.issue(identifier);
+      const issueState = await issue.state;
+
+      if (issueState === undefined || skipIssuesInStates.includes(issueState.id)) {
+        core.info(`Skipping issue ${identifier} because it is in state ${issueState?.name}`);
+        continue;
+      }
+
       uuidIdentifiers.push(issue.id);
     } catch (error) {
       core.error(`Error fetching issue with identifier ${identifier}, error: ${error}`);

@@ -30,7 +30,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.parseInputStateMap = exports.parseInputIdentifiers = void 0;
+exports.parseInputSkipIssues = exports.parseInputStateMap = exports.parseInputIdentifiers = void 0;
 const core = __importStar(__nccwpck_require__(2186));
 const parseInputIdentifiers = (identifiersAsString) => {
     if (identifiersAsString.length === 0) {
@@ -59,6 +59,19 @@ const parseInputStateMap = (stringStateMap) => {
     }
 };
 exports.parseInputStateMap = parseInputStateMap;
+const parseInputSkipIssues = (identifiersAsString) => {
+    if (identifiersAsString.length === 0) {
+        return [];
+    }
+    try {
+        return JSON.parse(identifiersAsString);
+    }
+    catch (error) {
+        core.debug(`Error parsing input ${error}`);
+        throw new Error('Error parsing input');
+    }
+};
+exports.parseInputSkipIssues = parseInputSkipIssues;
 
 
 /***/ }),
@@ -104,16 +117,21 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.splitLinearIdentifiersByTeam = exports.updateStatusOfLinearTickets = void 0;
 const core = __importStar(__nccwpck_require__(2186));
 const sdk_1 = __nccwpck_require__(8851);
-const updateStatusOfLinearTickets = (identifiers, stateId, isDryRun) => __awaiter(void 0, void 0, void 0, function* () {
+const updateStatusOfLinearTickets = (identifiers, stateId, skipIssuesInStates, isDryRun) => __awaiter(void 0, void 0, void 0, function* () {
     const identifiersAsString = core.getInput('linearToken');
     const linearClient = new sdk_1.LinearClient({ apiKey: identifiersAsString });
     // Collect UUID based identifiers
     // This is pretty inefficient, but Linear doesn't currently have a way to
-    // batch betch these IDs, or use the identifiers (ENG-123) to batch update issues. :(
+    // batch these IDs, or use the identifiers (ENG-123) to batch update issues. :(
     const uuidIdentifiers = [];
     for (const identifier of identifiers) {
         try {
             const issue = yield linearClient.issue(identifier);
+            const issueState = yield issue.state;
+            if (issueState === undefined || skipIssuesInStates.includes(issueState.id)) {
+                core.info(`Skipping issue ${identifier} because it is in state ${issueState === null || issueState === void 0 ? void 0 : issueState.name}`);
+                continue;
+            }
             uuidIdentifiers.push(issue.id);
         }
         catch (error) {
@@ -210,10 +228,12 @@ function run() {
         try {
             const identifiersAsString = core.getInput('pr-ids');
             const stateMapString = core.getInput('state-id-by-team');
+            const skipIssues = core.getInput('skip-issues-in-states');
             const isDryRun = core.getBooleanInput('dry-run');
             const githubContext = github.context;
             const { owner, repo } = githubContext.repo;
             const identifiers = (0, input_handling_1.parseInputIdentifiers)(identifiersAsString);
+            const skipIssuesInStates = (0, input_handling_1.parseInputSkipIssues)(skipIssues);
             const stateMap = (0, input_handling_1.parseInputStateMap)(stateMapString);
             core.info(`Executing action with identifiers ${identifiers} and state maps ${stateMapString}`);
             // Look up each PR and get all the Linear tickets associated with each PR
@@ -229,7 +249,7 @@ function run() {
                     core.error(`Unable to find a stateId for team ${team}. Skipping the team`);
                     continue;
                 }
-                yield (0, linear_status_update_1.updateStatusOfLinearTickets)(linearIdentifiers, stateId, isDryRun);
+                yield (0, linear_status_update_1.updateStatusOfLinearTickets)(linearIdentifiers, stateId, skipIssuesInStates, isDryRun);
             }
             core.info('Action finshed executing');
         }
