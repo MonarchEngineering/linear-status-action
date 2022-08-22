@@ -123,7 +123,8 @@ const updateStatusOfLinearTickets = (identifiers, stateId, skipIssuesInStates, i
     // Collect UUID based identifiers
     // This is pretty inefficient, but Linear doesn't currently have a way to
     // batch these IDs, or use the identifiers (ENG-123) to batch update issues. :(
-    const uuidIdentifiers = [];
+    // Use a set to avoid duplicates, which will cause an API error
+    const uuidIdentifiersSet = new Set();
     for (const identifier of identifiers) {
         try {
             const issue = yield linearClient.issue(identifier);
@@ -132,7 +133,7 @@ const updateStatusOfLinearTickets = (identifiers, stateId, skipIssuesInStates, i
                 core.info(`Skipping issue ${identifier} because it is in state ${issueState === null || issueState === void 0 ? void 0 : issueState.name}`);
                 continue;
             }
-            uuidIdentifiers.push(issue.id);
+            uuidIdentifiersSet.add(issue.id);
         }
         catch (error) {
             core.error(`Error fetching issue with identifier ${identifier}, error: ${error}`);
@@ -140,9 +141,10 @@ const updateStatusOfLinearTickets = (identifiers, stateId, skipIssuesInStates, i
     }
     // Chunk into sizes of 50 to do the batch updates
     const chunkSize = 50;
-    for (let i = 0; i < uuidIdentifiers.length; i += chunkSize) {
+    const uuidIdentifiersList = Array.from(uuidIdentifiersSet);
+    for (let i = 0; i < uuidIdentifiersList.length; i += chunkSize) {
         try {
-            const uuidIdentifiersChunk = uuidIdentifiers.slice(i, i + chunkSize);
+            const uuidIdentifiersChunk = uuidIdentifiersList.slice(i, i + chunkSize);
             core.info(`Batch updating to state: ${stateId}, ${uuidIdentifiersChunk}`);
             if (!isDryRun) {
                 yield linearClient.issueBatchUpdate(uuidIdentifiersChunk, { stateId });
